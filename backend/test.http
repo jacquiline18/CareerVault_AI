@@ -1,0 +1,29 @@
+### Register
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "full_name": "John Doe",
+  "email": "john@example.com",
+  "password": "password123",
+  "college_name": "MIT",
+  "department": "Computer Science",
+  "year_of_study": 2
+}
+
+### Login
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "password123"
+}
+
+### Get Me (Protected)
+GET http://localhost:5000/api/auth/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiZW1haWwiOiJqb2huQGV4YW1wbGUuY29tIiwiaWF0IjoxNzg0NzI3NTE1LCJleHAiOjE3ODUzMzIzMTV9.mChS91508xlQtj5T5VOL-A_S7CxS4Z5JYZ4TB6YNFrc
+
+### Logout (Protected)
+POST http://localhost:5000/api/auth/logout
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiZW1haWwiOiJqb2huQGV4YW1wbGUuY29tIiwiaWF0IjoxNzg0NzI3NTE1LCJleHAiOjE3ODUzMzIzMTV9.mChS91508xlQtj5T5VOL-A_S7CxS4Z5JYZ4TB6YNFrc
