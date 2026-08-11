@@ -1,5 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import numpy as np
+from log_util import log
 
 # Load once at startup - all-MiniLM-L6-v2 is fast, small (80MB), 384-dim
 _model = None
@@ -7,9 +8,9 @@ _model = None
 def get_model():
     global _model
     if _model is None:
-        print("📦 Loading embedding model...")
+        log("[EMBED] Loading embedding model...")
         _model = SentenceTransformer("all-MiniLM-L6-v2")
-        print("✅ Embedding model loaded")
+        log("[EMBED] Embedding model loaded")
     return _model
 
 
@@ -34,7 +35,7 @@ def chunk_text(text: str, chunk_size: int = 400, overlap: int = 50) -> list[str]
 def store_chunks(supabase_client, user_id: str, document_id: int, text: str):
     """Chunk text, embed each chunk, store in document_chunks table."""
     if not text or not text.strip():
-        print("⚠️ No text to embed")
+        log("[WARN] No text to embed")
         return
 
     # Clear old chunks for this document
@@ -44,7 +45,7 @@ def store_chunks(supabase_client, user_id: str, document_id: int, text: str):
     if not chunks:
         return
 
-    print(f"🔢 Embedding {len(chunks)} chunks for document {document_id}")
+    log(f"[EMBED] Embedding {len(chunks)} chunks for document {document_id}")
     model = get_model()
     embeddings = model.encode(chunks, normalize_embeddings=True, show_progress_bar=False)
 
@@ -60,7 +61,7 @@ def store_chunks(supabase_client, user_id: str, document_id: int, text: str):
     ]
 
     supabase_client.table("document_chunks").insert(rows).execute()
-    print(f"✅ Stored {len(rows)} chunks with embeddings")
+    log(f"[EMBED] Stored {len(rows)} chunks with embeddings")
 
 
 def search_chunks(supabase_client, user_id: str, query: str, top_k: int = 5) -> list[dict]:

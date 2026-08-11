@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from groq import Groq
 from fastapi import HTTPException
+from log_util import log
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -22,6 +23,7 @@ KNOWN_SKILLS = {
     "python": "Python", "java": "Java", "javascript": "JavaScript", "typescript": "TypeScript",
     "c++": "C++", "c#": "C#", "golang": "Go", "rust": "Rust",
     "kotlin": "Kotlin", "swift": "Swift", "php": "PHP", "ruby": "Ruby", "scala": "Scala",
+    "lua": "Lua", "haskell": "Haskell", "elixir": "Elixir", "objective-c": "Objective-C",
     "matlab": "MATLAB", "perl": "Perl", "dart": "Dart", "bash": "Bash", "shell": "Shell",
     "html": "HTML", "css": "CSS", "sql": "SQL", "mysql": "MySQL", "postgresql": "PostgreSQL",
     "sqlite": "SQLite", "mongodb": "MongoDB", "redis": "Redis", "firebase": "Firebase",
@@ -86,18 +88,31 @@ def force_extract_skills(text: str, existing_skills: list) -> list:
 
 def force_extract_sololearn_certs(text: str, existing_certs: list) -> list:
     text_lower = text.lower()
-    if "sololearn" not in text_lower:
-        return existing_certs
     existing_names = {c.get("certificate_name", "").lower() for c in existing_certs}
     result = list(existing_certs)
-    for course_key, course_name in SOLOLEARN_COURSES.items():
-        escaped = re.escape(course_key)
-        left  = r'\b' if course_key[0].isalnum()  else r'(?<![\w])'
-        right = r'\b' if course_key[-1].isalnum() else r'(?![\w])'
-        pattern = left + escaped + right
-        if re.search(pattern, text_lower) and course_name.lower() not in existing_names:
-            result.append({"certificate_name": course_name, "issuer": "SoloLearn", "issue_date": None})
-            existing_names.add(course_name.lower())
+
+    if "sololearn" in text_lower:
+        for course_key, course_name in SOLOLEARN_COURSES.items():
+            escaped = re.escape(course_key)
+            left  = r'\b' if course_key[0].isalnum()  else r'(?<![\w])'
+            right = r'\b' if course_key[-1].isalnum() else r'(?![\w])'
+            pattern = left + escaped + right
+            if re.search(pattern, text_lower) and course_name.lower() not in existing_names:
+                result.append({"certificate_name": course_name, "issuer": "SoloLearn", "issue_date": None})
+                existing_names.add(course_name.lower())
+
+    cert_patterns = [
+        r"certificate of completion[^\n]{0,80}?([A-Za-z0-9+#.\s]{2,40})",
+        r"certified in[^\n]{0,40}?([A-Za-z0-9+#.\s]{2,40})",
+        r"has successfully completed[^\n]{0,80}?([A-Za-z0-9+#.\s]{2,40})",
+    ]
+    for pattern in cert_patterns:
+        for match in re.finditer(pattern, text_lower, re.IGNORECASE):
+            name = match.group(1).strip(" .,-")
+            if len(name) >= 2 and name.lower() not in existing_names:
+                result.append({"certificate_name": name.title(), "issuer": "Unknown", "issue_date": None})
+                existing_names.add(name.lower())
+
     return result
 
 
@@ -105,23 +120,24 @@ def enrich_result(result: dict, raw_text: str) -> dict:
     result["skills"] = force_extract_skills(raw_text, result.get("skills", []))
     result["certificates"] = force_extract_sololearn_certs(raw_text, result.get("certificates", []))
     for cert in result["certificates"]:
-        if cert.get("issuer", "").lower() == "sololearn":
-            name = cert.get("certificate_name", "")
-            skill_name = SOLOLEARN_COURSES.get(name.lower(), name)
-            if skill_name and skill_name not in result["skills"]:
-                result["skills"].append(skill_name)
+        name = cert.get("certificate_name", "")
+        skill_name = SOLOLEARN_COURSES.get(name.lower(), name)
+        if skill_name.lower() in KNOWN_SKILLS:
+            skill_name = KNOWN_SKILLS[skill_name.lower()]
+        if skill_name and skill_name not in result["skills"]:
+            result["skills"].append(skill_name)
     return result
 
 
 PROMPT_TEMPLATE = """You are a career document data extractor. Extract ALL structured information from the document below.
 
 RULES:
-- skills: every programming language, framework, tool, database, cloud platform, soft skill mentioned
-- certificates: every certificate/course completion with exact name, issuer, date
+- skills: EVERY skill mentioned, especially ALL programming languages (Python, Java, C, C++, JavaScript, TypeScript, Go, Rust, etc.), frameworks, tools, databases, cloud platforms, and soft skills. If a certificate is for a programming language or tech course, also add that language/topic as a skill.
+- certificates: every certificate, course completion, badge, or credential with exact name, issuer, and date
 - projects: every project with name and description
 - internships: company, role, duration
 - achievements: awards, rankings, honors
-- career_paths: 3-5 suggested roles based on content
+- career_paths: 3-5 realistic suggested roles based on the document content
 
 Return ONLY valid JSON, no markdown:
 {
@@ -165,7 +181,7 @@ def analyze_document(text: str) -> dict:
     )
     result = parse_response(response.choices[0].message.content)
     result = enrich_result(result, text)
-    print(f"📊 Final: {len(result.get('skills', []))} skills, {len(result.get('certificates', []))} certs, {len(result.get('projects', []))} projects")
+    log(f"[AI] Final: {len(result.get('skills', []))} skills, {len(result.get('certificates', []))} certs, {len(result.get('projects', []))} projects")
     return result
 
 
@@ -179,24 +195,24 @@ def ocr_image_tesseract(image_bytes: bytes) -> str:
             scale = 1000 / w
             img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
         text = pytesseract.image_to_string(img, config="--psm 3")
-        print(f"📸 Tesseract OCR: {len(text)} chars")
+        log(f"[OCR] Tesseract: {len(text)} chars")
         return text.strip()
     except Exception as e:
-        print(f"❌ Tesseract OCR failed: {e}")
+        log(f"[ERR] Tesseract OCR failed: {e}")
         return ""
 
 
 def analyze_document_vision(file_url: str) -> dict:
-    print("🖼️ Starting image processing with Tesseract OCR")
+    log("[OCR] Starting image processing with Tesseract")
     try:
         image_bytes = requests.get(file_url, timeout=30).content
         ocr_text = ocr_image_tesseract(image_bytes)
 
         if ocr_text and len(ocr_text) > 30:
-            print(f"✅ OCR got {len(ocr_text)} chars — running AI extraction")
+            log(f"[OCR] Got {len(ocr_text)} chars, running AI extraction")
             result = analyze_document(ocr_text)
         else:
-            print("⚠️ OCR got little text — returning enriched empty result")
+            log("[WARN] OCR got little text, returning enriched empty result")
             result = {
                 "document_type": "Unknown",
                 "skills": [], "projects": [], "certificates": [],
@@ -204,10 +220,10 @@ def analyze_document_vision(file_url: str) -> dict:
             }
             result = enrich_result(result, ocr_text or "")
 
-        print(f"✅ Final: {len(result.get('skills', []))} skills, {len(result.get('certificates', []))} certs")
+        log(f"[AI] Final: {len(result.get('skills', []))} skills, {len(result.get('certificates', []))} certs")
         return result
     except Exception as e:
-        print(f"❌ Image processing failed: {e}")
+        log(f"[ERR] Image processing failed: {e}")
         raise HTTPException(status_code=422, detail=f"Could not process image: {e}")
 
 

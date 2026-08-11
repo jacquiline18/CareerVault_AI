@@ -19,7 +19,8 @@ const processDocument = async (req, res) => {
 
     res.status(200).json({ status: "success", result: response.data });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const detail = err.response?.data?.detail || err.response?.data?.error || err.message;
+    res.status(err.response?.status || 500).json({ error: detail });
   }
 };
 

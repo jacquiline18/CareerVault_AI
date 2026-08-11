@@ -3,6 +3,8 @@ import traceback
 from dotenv import load_dotenv
 load_dotenv()
 
+from log_util import log
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -84,10 +86,10 @@ def safe_insert(table: str, rows: list):
         return
     try:
         res = supabase_client.table(table).insert(rows).execute()
-        print(f"✅ Inserted {len(rows)} rows into {table}")
+        log(f"[OK] Inserted {len(rows)} rows into {table}")
         return res
     except Exception as e:
-        print(f"❌ Failed to insert into {table}: {e}")
+        log(f"[ERR] Failed to insert into {table}: {e}")
         traceback.print_exc()
 
 def get_existing(table: str, user_id: str, column: str):
@@ -97,13 +99,44 @@ def get_existing(table: str, user_id: str, column: str):
     except:
         return set()
 
+def normalize_skill(value) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        return (value.get("skill_name") or value.get("name") or "").strip()
+    return str(value).strip()
+
+
+def normalize_certificate(value) -> dict:
+    if isinstance(value, str):
+        return {"certificate_name": value.strip(), "issuer": "", "issue_date": None}
+    if isinstance(value, dict):
+        return {
+            "certificate_name": (value.get("certificate_name") or value.get("name") or "").strip(),
+            "issuer": value.get("issuer") or value.get("organization") or "",
+            "issue_date": value.get("issue_date") or value.get("date"),
+        }
+    return {"certificate_name": str(value).strip(), "issuer": "", "issue_date": None}
+
+
+def normalize_career_path(value) -> dict:
+    if isinstance(value, str):
+        return {"career_role": value.strip(), "confidence_score": 0.8}
+    if isinstance(value, dict):
+        return {
+            "career_role": (value.get("career_role") or value.get("role") or value.get("title") or "").strip(),
+            "confidence_score": value.get("confidence_score", 0.8),
+        }
+    return {"career_role": str(value).strip(), "confidence_score": 0.8}
+
+
 @app.post("/process")
 async def process_document(req: ProcessRequest):
     try:
-        print(f"📄 Processing document {req.document_id} for user {req.user_id}")
+        log(f"[DOC] Processing document {req.document_id} for user {req.user_id}")
 
         text = extract_text(req.file_url, req.file_type)
-        print(f"📝 Extracted {len(text)} characters")
+        log(f"[DOC] Extracted {len(text)} characters")
 
         is_image = req.file_type.startswith("image/") or any(t in req.file_type for t in ["png", "jpeg", "webp"])
         is_scanned_pdf = "pdf" in req.file_type and not text.strip()
@@ -112,16 +145,18 @@ async def process_document(req: ProcessRequest):
             result = analyze_document_vision(req.file_url)
         else:
             result = analyze_document(text)
-        print(f"🤖 AI Result: {result}")
+        log(f"[AI] Result: {result}")
 
         uid = req.user_id
 
         # Skills - deduplicate
-        if result.get("skills"):
+        raw_skills = result.get("skills") or []
+        skills = [s for s in (normalize_skill(item) for item in raw_skills) if s]
+        if skills:
             existing_skills = get_existing("skills", uid, "skill_name")
             new_skills = [
                 {"user_id": uid, "skill_name": s}
-                for s in result["skills"]
+                for s in skills
                 if s.lower() not in existing_skills
             ]
             safe_insert("skills", new_skills)
@@ -137,7 +172,10 @@ async def process_document(req: ProcessRequest):
             safe_insert("projects", new_projects)
 
         # Certificates - deduplicate
-        if result.get("certificates"):
+        raw_certs = result.get("certificates") or []
+        certificates = [normalize_certificate(c) for c in raw_certs]
+        certificates = [c for c in certificates if c.get("certificate_name")]
+        if certificates:
             existing_certs = get_existing("certificates", uid, "certificate_name")
             new_certs = [
                 {
@@ -146,8 +184,8 @@ async def process_document(req: ProcessRequest):
                     "issuer": c.get("issuer", ""),
                     "issue_date": c.get("issue_date", "")
                 }
-                for c in result["certificates"]
-                if c.get("certificate_name", "").lower() not in existing_certs
+                for c in certificates
+                if c["certificate_name"].lower() not in existing_certs
             ]
             safe_insert("certificates", new_certs)
 
@@ -177,12 +215,15 @@ async def process_document(req: ProcessRequest):
             safe_insert("achievements", new_achievements)
 
         # Career insights - deduplicate
-        if result.get("career_paths"):
+        raw_paths = result.get("career_paths") or []
+        career_paths = [normalize_career_path(c) for c in raw_paths]
+        career_paths = [c for c in career_paths if c.get("career_role")]
+        if career_paths:
             existing_insights = get_existing("career_insights", uid, "career_role")
             new_insights = [
                 {"user_id": uid, "career_role": c["career_role"], "confidence_score": c.get("confidence_score", 0.0)}
-                for c in result["career_paths"]
-                if c.get("career_role", "").lower() not in existing_insights
+                for c in career_paths
+                if c["career_role"].lower() not in existing_insights
             ]
             safe_insert("career_insights", new_insights)
 
@@ -196,7 +237,7 @@ async def process_document(req: ProcessRequest):
             embed_text = text if text.strip() else str(result)
             store_chunks(supabase_client, uid, req.document_id, embed_text)
         except Exception as e:
-            print(f"⚠️ Embedding storage failed: {e}")
+            log(f"[WARN] Embedding storage failed: {e}")
 
         # Return immediately - knowledge graph runs in background
         import threading
@@ -217,9 +258,9 @@ async def process_document(req: ProcessRequest):
                         for r in relationships
                     ]
                     safe_insert("knowledge_graph", graph_rows)
-                    print(f"🕸️ Knowledge graph: {len(graph_rows)} relationships stored")
+                    log(f"[GRAPH] Knowledge graph: {len(graph_rows)} relationships stored")
             except Exception as e:
-                print(f"⚠️ Knowledge graph generation failed: {e}")
+                log(f"[WARN] Knowledge graph generation failed: {e}")
         threading.Thread(target=build_graph, daemon=True).start()
 
         return {"status": "success", "result": result}

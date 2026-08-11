@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply font-sans antialiased; }
+  :root {
+    --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    --coral-gradient:   linear-gradient(135deg, #ff5a3c 0%, #ed3a1e 100%);
+    --orange-gradient:  linear-gradient(135deg, #ff9d38 0%, #ff7d0a 100%);
+    --pop-gradient:     linear-gradient(135deg, #6366f1 0%, #ff5a3c 50%, #ff9d38 100%);
+    --hero-gradient:    linear-gradient(135deg, #4338ca 0%, #6366f1 40%, #ff5a3c 75%, #ff9d38 100%);
+    --glass-bg: rgba(255,255,255,0.75);
+    --glass-border: rgba(255,255,255,0.25);
+    --glass-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+
+  .gradient-text {
+    background: var(--pop-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-bg-primary  { background: var(--primary-gradient); }
+  .gradient-bg-coral    { background: var(--coral-gradient); }
+  .gradient-bg-orange   { background: var(--orange-gradient); }
+  .gradient-bg-pop      { background: var(--pop-gradient); }
+  .gradient-bg-hero     { background: var(--hero-gradient); }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/80
+           focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20
+           focus:outline-none transition-all duration-300
+           placeholder:text-gray-400 text-gray-700;
+  }
+
+  .btn-primary {
+    @apply text-white font-semibold py-3 px-6 rounded-xl
+           hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]
+           transition-all duration-300
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+    background: var(--pop-gradient);
+  }
+
+  .btn-secondary {
+    @apply bg-white text-primary-600 font-semibold py-2 px-5 rounded-xl
+           border border-primary-200 hover:border-coral-400
+           hover:bg-orange-50 hover:shadow-md
+           active:scale-[0.98] transition-all duration-300;
+  }
+
+  .btn-danger {
+    @apply bg-gradient-to-r from-red-500 to-rose-600 text-white font-semibold
+           py-2 px-5 rounded-xl hover:shadow-lg hover:shadow-red-500/25
+           hover:scale-[1.02] active:scale-[0.98] transition-all duration-300;
+  }
+
+  .btn-success {
+    @apply bg-gradient-to-r from-emerald-500 to-green-600 text-white font-semibold
+           py-2 px-5 rounded-xl hover:shadow-lg hover:shadow-green-500/25
+           hover:scale-[1.02] active:scale-[0.98] transition-all duration-300;
+  }
+
+  .section-card {
+    @apply glass-card rounded-2xl p-6 transition-all duration-300
+           hover:shadow-xl;
+  }
+
+  .badge { @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium; }
+  .badge-primary { @apply badge bg-primary-100 text-primary-700; }
+  .badge-coral   { @apply badge bg-coral-100 text-coral-700; }
+  .badge-orange  { @apply badge bg-orange-100 text-orange-700; }
+  .badge-success { @apply badge bg-green-100 text-green-700; }
+
+  .stat-card {
+    @apply glass-card rounded-2xl p-5 transition-all duration-500
+           hover:scale-[1.03] hover:shadow-xl cursor-default;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .drop-shadow-glow        { filter: drop-shadow(0 0 8px rgba(99,102,241,0.4)); }
+  .drop-shadow-glow-coral  { filter: drop-shadow(0 0 8px rgba(255,90,60,0.4)); }
+  .drop-shadow-glow-orange { filter: drop-shadow(0 0 8px rgba(255,125,10,0.4)); }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: linear-gradient(#a5b4fc, #ffa494); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(#818cf8, #ff7a63); }
+
+/* Drop zone */
+.drop-zone {
+  @apply border-2 border-dashed border-gray-300 rounded-2xl p-8
+         text-center cursor-pointer transition-all duration-300;
+}
+.drop-zone:hover,
+.drop-zone.dragover {
+  border-color: #ff5a3c;
+  background: rgba(255,90,60,0.04);
+}
