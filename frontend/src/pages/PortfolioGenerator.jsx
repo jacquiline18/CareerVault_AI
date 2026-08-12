@@ -17,7 +17,6 @@ export default function PortfolioGenerator() {
   const [settings, setSettings] = useState({ theme: "indigo", bio: "", github_url: "", linkedin_url: "", contact_email: "" });
   const [html, setHtml] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [preview, setPreview] = useState(false);
 
   const bg   = dark ? "bg-gray-950" : "";
   const card = dark ? "bg-gray-900 border border-gray-800" : "bg-white";
@@ -34,7 +33,6 @@ export default function PortfolioGenerator() {
     try {
       const { data } = await api.post("/api/ai/portfolio", { settings });
       setHtml(data.html);
-      setPreview(true);
     } catch (err) { alert("Failed: " + err.message); }
     setGenerating(false);
   };
