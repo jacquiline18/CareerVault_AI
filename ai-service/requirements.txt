@@ -5,7 +5,8 @@ supabase
 groq
 requests
 PyPDF2
-python-docx
 pdfplumber
+python-docx
 sentence-transformers
 numpy
+pytesseract
