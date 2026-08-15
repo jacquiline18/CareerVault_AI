@@ -7,3 +7,4 @@ transformers
 torch
 pytesseract
 python-dotenv
+requests
